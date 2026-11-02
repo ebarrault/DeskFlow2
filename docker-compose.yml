@@ -1,0 +1,54 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: helpdesk
+      POSTGRES_PASSWORD: helpdesk
+      POSTGRES_DB: helpdesk
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U helpdesk"]
+      interval: 5s
+      retries: 10
+    ports:
+      - "5435:5432"
+
+  # Faux serveur SMTP : les mails sont visibles sur http://localhost:8026
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8026:8025"
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: jdbc:postgresql://db:5432/helpdesk
+      DATABASE_USER: helpdesk
+      DATABASE_PASSWORD: helpdesk
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-a-changer-absolument-32-caracteres-minimum}
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      CORS_ORIGIN: http://localhost:8083
+      APP_URL: http://localhost:8083
+      UPLOAD_DIR: /app/uploads
+      SEED: "true"
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8083:80"
+
+volumes:
+  db-data:
+  uploads:
